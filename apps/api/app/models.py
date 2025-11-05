@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, UniqueConstraint, Index
 from enum import Enum
 
 
@@ -13,6 +13,8 @@ class User(SQLModel, table=True):
 
 
 class OAuthToken(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_user_provider"),)
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(index=True, foreign_key="user.id")
     provider: str = Field(default="google")
@@ -26,6 +28,11 @@ class OAuthToken(SQLModel, table=True):
 
 
 class File(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_file_user_sha256", "user_id", "sha256"),  # Deduplication lookups
+        Index("ix_file_created", "created_at"),  # Sorting/pagination
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(index=True, foreign_key="user.id")
     drive_file_id: Optional[str] = Field(default=None, index=True)
@@ -44,6 +51,15 @@ class Room(SQLModel, table=True):
 
 
 class Membership(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "room_id", name="uq_user_room"
+        ),  # One membership per user per room
+        Index(
+            "ix_membership_room_role", "room_id", "role"
+        ),  # Lookup admins/owners of a room
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(index=True, foreign_key="user.id")
     room_id: int = Field(index=True, foreign_key="room.id")
@@ -59,6 +75,13 @@ class Membership(SQLModel, table=True):
 
 
 class FileRoomLink(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "file_id", "room_id", name="uq_file_room"
+        ),  # One link per file per room
+        Index("ix_link_room_file", "room_id", "file_id"),  # Lookup files in a room
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
     file_id: int = Field(index=True, foreign_key="file.id")
     room_id: int = Field(index=True, foreign_key="room.id")
@@ -66,6 +89,12 @@ class FileRoomLink(SQLModel, table=True):
 
 
 class AuditLog(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_audit_created", "created_at"),  # Time-series queries
+        Index("ix_audit_room_action", "room_id", "action"),  # Room activity reports
+        Index("ix_audit_actor_created", "actor_user_id", "created_at"),  # User activity
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
     actor_user_id: Optional[int] = Field(
         default=None, index=True, foreign_key="user.id"
