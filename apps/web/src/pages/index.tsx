@@ -197,23 +197,26 @@ export default function Home() {
             </div>
           </div>
         </header>
-        <main className="max-w-5xl mx-auto p-4">
+        <main className="max-w-5xl mx-auto p-4 space-y-4">
+          {/* Welcome Section */}
           <div className="bg-white rounded-lg shadow p-6">
             <h1 className="text-2xl font-semibold mb-2">Welcome</h1>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600">
               {isAuthed 
                 ? "Manage your secure data rooms and share files with authorized members." 
                 : "Sign in with Google to create private rooms and import files from Drive. Or browse the public Demo Room below."}
             </p>
+          </div>
+
         {reconnectNeeded && (
-          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-3 py-2 rounded mb-3">
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-3 py-2 rounded">
             Token expired or revoked. Please reconnect Google Drive.
             <button className="ml-2 underline" onClick={connect}>Reconnect</button>
           </div>
         )}
-        
 
-        <section className="mt-7">
+        {/* Rooms Section */}
+        <section className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
             <span>📁</span>
             <span>Rooms</span>
@@ -261,7 +264,7 @@ export default function Home() {
               </div>
 
               {isAuthed && (
-                <section className="mt-4">
+                <section className="bg-gray-50 rounded-lg p-5 -mx-6 mt-6 px-6">
                   <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
                     <span>📥</span>
                     <span>Import into {selectedRoom?.name}</span>
@@ -308,7 +311,7 @@ export default function Home() {
               )}
 
               {isAuthed && selectedRoom && ['owner', 'admin'].includes(selectedRoom.role) && (
-                <section className="mt-7">
+                <section className="bg-blue-50 rounded-lg p-5 -mx-6 mt-6 px-6">
                   <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
                     <span>👥</span>
                     <span>Members</span>
@@ -348,7 +351,7 @@ export default function Home() {
               )}
 
               {isAuthed && (
-                <section className="mt-7">
+                <section className="bg-white border border-gray-200 rounded-lg p-5 -mx-6 mt-6 px-6">
                   <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
                     <span>📄</span>
                     <span>{filesTitle}</span>
@@ -359,8 +362,6 @@ export default function Home() {
             </div>
           )}
         </section>
-
-          </div>
 
         <DriveBrowser
           open={browseOpen}
