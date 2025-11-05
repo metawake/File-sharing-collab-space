@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from urllib.parse import urlencode, quote
+import asyncio
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -486,31 +487,34 @@ async def import_files(req: ImportRequest, request: Request) -> JSONResponse:
         if not token:
             raise HTTPException(status_code=401, detail="Not connected to Google")
 
-    results: List[Dict[str, Any]] = []
-    for fid in req.drive_file_ids:
-        outcome = await _import_one(user, fid, settings.storage_dir, token)
-        # Optionally link to room if imported
-        if req.room_id and outcome.get("status") == "imported" and outcome.get("id"):
-            with Session(engine) as session:
-                # Ensure permission to add files to room
-                _ensure_role(session, user.id, req.room_id, ["owner", "admin", "editor"])  # type: ignore[arg-type]
-                existing = session.exec(
-                    select(FileRoomLink).where(FileRoomLink.room_id == req.room_id, FileRoomLink.file_id == outcome["id"])  # type: ignore[index]
-                ).first()
-                if not existing:
-                    link = FileRoomLink(room_id=req.room_id, file_id=outcome["id"])  # type: ignore[arg-type]
-                    session.add(link)
-                    _log_action(
-                        session,
-                        actor_user_id=user.id,
-                        action="room.link_file",
-                        object_type="file",
-                        object_id=outcome["id"],
-                        room_id=req.room_id,
-                    )
-                    session.commit()
-        results.append(outcome)
-    return JSONResponse({"results": results})
+    # Import all files concurrently
+    import_tasks = [_import_one(user, fid, settings.storage_dir, token) for fid in req.drive_file_ids]
+    results = await asyncio.gather(*import_tasks)
+    
+    # Link imported files to room if specified
+    if req.room_id:
+        with Session(engine) as session:
+            # Ensure permission to add files to room
+            _ensure_role(session, user.id, req.room_id, ["owner", "admin", "editor"])  # type: ignore[arg-type]
+            for outcome in results:
+                if outcome.get("status") == "imported" and outcome.get("id"):
+                    existing = session.exec(
+                        select(FileRoomLink).where(FileRoomLink.room_id == req.room_id, FileRoomLink.file_id == outcome["id"])  # type: ignore[index]
+                    ).first()
+                    if not existing:
+                        link = FileRoomLink(room_id=req.room_id, file_id=outcome["id"])  # type: ignore[arg-type]
+                        session.add(link)
+                        _log_action(
+                            session,
+                            actor_user_id=user.id,
+                            action="room.link_file",
+                            object_type="file",
+                            object_id=outcome["id"],
+                            room_id=req.room_id,
+                        )
+            session.commit()
+    
+    return JSONResponse({"results": list(results)})
 
 
 @app.get("/api/drive/files")
