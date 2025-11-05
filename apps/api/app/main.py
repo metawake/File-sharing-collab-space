@@ -37,6 +37,10 @@ app.add_middleware(
 
 
 def get_session_email(request: Request, fallback_email: Optional[str]) -> Optional[str]:
+    """
+    Extract user email from session, with optional fallback for dev/testing.
+    Only uses fallback when ALLOW_EMAIL_PARAM is enabled.
+    """
     sess_email = None
     try:
         sess = request.session  # type: ignore[attr-defined]
@@ -53,6 +57,7 @@ def get_session_email(request: Request, fallback_email: Optional[str]) -> Option
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses."""
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -313,6 +318,7 @@ class ImportRequest(BaseModel):
 
 
 def _safe_filename(name: str) -> str:
+    """Sanitize filename by replacing path separators with underscores."""
     candidate = name.replace("/", "_").replace("\\", "_")
     return candidate or "file"
 
@@ -323,6 +329,10 @@ async def _import_one(
     storage_dir: str,
     tokens: OAuthToken,
 ) -> Dict[str, Any]:
+    """
+    Import a single file from Google Drive.
+    Returns a dict with status: 'imported', 'duplicate', or 'error'.
+    """
     client = GoogleDriveClient(TokenBundle(tokens.access_token, tokens.refresh_token))
     try:
         status, meta = await client.get_metadata_with_refresh(
@@ -636,6 +646,7 @@ def _log_action(
     request: Optional[Request] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> None:
+    """Record an action in the audit log for security and compliance tracking."""
     ip = None
     ua = None
     try:
@@ -660,6 +671,7 @@ def _log_action(
 def _get_active_user(
     session: Session, request: Request, fallback_email: Optional[str]
 ) -> Optional[User]:
+    """Retrieve the active user from session or fallback email parameter."""
     active_email = get_session_email(request, fallback_email)
     if not active_email:
         return None
@@ -669,6 +681,7 @@ def _get_active_user(
 def _get_membership(
     session: Session, user_id: int, room_id: int
 ) -> Optional[Membership]:
+    """Get a user's membership record for a specific room."""
     return session.exec(
         select(Membership).where(
             Membership.user_id == user_id, Membership.room_id == room_id
@@ -679,6 +692,7 @@ def _get_membership(
 def _ensure_role(
     session: Session, user_id: int, room_id: int, allowed: List[str]
 ) -> None:
+    """Check if user has one of the allowed roles in the room. Raises 403 if not."""
     m = _get_membership(session, user_id, room_id)
     if not m or (getattr(m.role, "value", m.role) not in allowed):
         raise HTTPException(status_code=403, detail="Forbidden")
