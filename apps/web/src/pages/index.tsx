@@ -158,12 +158,7 @@ export default function Home() {
     );
   };
 
-  // Auto-select the public demo room for logged-out users so the UI shows content immediately
-  useEffect(() => {
-    if (!isAuthed && !isRoomSelected && Array.isArray(roomsQ.data) && roomsQ.data.length === 1) {
-      setSelectedRoom(roomsQ.data[0]);
-    }
-  }, [isAuthed, isRoomSelected, roomsQ.data]);
+  // Note: Removed auto-select of Demo Room - users should explicitly choose to enter a room
 
   return (
     <>
@@ -220,7 +215,7 @@ export default function Home() {
             <p className="text-gray-600">
               {isAuthed 
                 ? "Manage your secure data rooms and share files with authorized members." 
-                : "Sign in with Google to create private rooms and import files from Drive. Or browse the public Demo Room below."}
+                : "Sign in with Google to create private rooms and import files. Or click the Demo Room below to explore as a guest."}
             </p>
           </div>
 
