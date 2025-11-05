@@ -829,6 +829,36 @@ def add_member(
         return JSONResponse({"ok": True})
 
 
+@app.get("/api/rooms/{room_id}/members")
+def list_room_members(
+    room_id: int, request: Request, email: Optional[str] = None
+) -> JSONResponse:
+    """List all members of a data room with their roles. Requires room membership."""
+    with Session(engine) as session:
+        actor = _get_active_user(session, request, email)
+        if not actor:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        # Any member can view the member list
+        _ensure_role(session, actor.id, room_id, ["owner", "admin", "editor", "viewer"])  # type: ignore[arg-type]
+        
+        memberships = session.exec(
+            select(Membership, User).where(
+                Membership.room_id == room_id,
+                Membership.user_id == User.id
+            )
+        ).all()
+        
+        payload = [
+            {
+                "email": m.User.email,
+                "role": getattr(m.Membership.role, "value", m.Membership.role),
+                "joined_at": m.Membership.created_at.isoformat() if m.Membership.created_at else None,
+            }
+            for m in memberships
+        ]
+        return JSONResponse({"members": payload})
+
+
 @app.get("/api/rooms/{room_id}/files")
 def room_files(
     room_id: int, request: Request, email: Optional[str] = None

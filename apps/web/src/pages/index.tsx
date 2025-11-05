@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { importFiles, ApiError, logout, listRooms, createRoom, getMe, addRoomMember } from '../utils/api';
+import { importFiles, ApiError, logout, listRooms, createRoom, getMe, addRoomMember, listRoomMembers } from '../utils/api';
 import type { Room } from '../utils/api';
 import { extractDriveIds } from '../utils/drive';
 import { DriveBrowser } from '../components/DriveBrowser';
@@ -117,6 +117,7 @@ export default function Home() {
     onSuccess: () => {
       setNewMemberEmail('');
       setNewMemberRole('viewer');
+      qc.invalidateQueries({ queryKey: ['members', selectedRoom?.id] });
       toast.add('Member added successfully', 'success');
     },
     onError: (err: unknown) => {
@@ -126,6 +127,12 @@ export default function Home() {
         toast.add('Failed to add member', 'error');
       }
     },
+  });
+
+  const membersQ = useQuery({
+    queryKey: ['members', selectedRoom?.id],
+    queryFn: () => selectedRoom ? listRoomMembers(selectedRoom.id, sessionEmail) : Promise.resolve([]),
+    enabled: !!selectedRoom && !!sessionEmail,
   });
 
   const isAuthed = !!sessionEmail;
@@ -166,23 +173,32 @@ export default function Home() {
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white/90 border-b">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <span className="text-2xl">🗂️</span>
-              <span>DataRoom Service</span>
+            <div className="flex items-center gap-3">
+              <div className="text-lg font-bold flex items-center gap-2">
+                <span className="text-2xl">🔒</span>
+                <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">HarvyAI DataRoom</span>
+              </div>
+              <span className="text-xs text-gray-500 hidden sm:inline">Secure Document Sharing</span>
             </div>
             <div className="flex items-center gap-3 text-sm">
               {isAuthed ? (
                 <>
                   <span className="text-gray-700">Signed in as <span className="font-medium">{sessionEmail}</span></span>
                   <button
-                    className="px-3 py-1.5 rounded border"
+                    className="px-3 py-1.5 rounded border hover:bg-gray-50"
                     onClick={async () => {
                       try { await logout(); } catch (_) {}
                       try { localStorage.removeItem('email'); } catch (_) {}
                       setEmail('');
                       setIds('');
                       setBrowseOpen(false);
-                      toast.add('Signed out', 'info');
+                      setSelectedRoom(null); // Reset to room list view
+                      setNewRoomName(''); // Clear form
+                      setNewMemberEmail(''); // Clear form
+                      // Refetch data to show public room for logged-out users
+                      qc.invalidateQueries({ queryKey: ['me'] });
+                      qc.invalidateQueries({ queryKey: ['rooms'] });
+                      toast.add('✅ Successfully logged out', 'success');
                     }}
                   >
                     Sign out
@@ -265,23 +281,32 @@ export default function Home() {
 
               {isAuthed && (
                 <section className="bg-gray-50 rounded-lg p-5 -mx-6 mt-6 px-6">
-                  <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
+                  <h2 className="text-xl font-medium mb-2 flex items-center gap-2">
                     <span>📥</span>
-                    <span>Import into {selectedRoom?.name}</span>
+                    <span>Add Files from Google Drive</span>
                   </h2>
                   {canImportToCurrent ? (
                     <>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Import documents from your Google Drive into <span className="font-medium">{selectedRoom?.name}</span>. 
+                        Files will be securely stored and accessible only to authorized members.
+                      </p>
                       <div className="flex items-center gap-2 flex-wrap">
                         <input
                           value={ids}
                           onChange={(e) => setIds(e.target.value)}
-                          placeholder="Paste Drive URL(s) or raw ID(s), comma separated"
+                          placeholder="Paste Google Drive file URLs (comma-separated)"
                           className="px-3 py-2 rounded border min-w-[360px] flex-1"
                         />
-                        <button className="px-3 py-2 rounded border" onClick={() => setBrowseOpen(true)} disabled={!sessionEmail}>Browse Drive</button>
-                        <button className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50" onClick={() => doImport.mutate({})} disabled={!canImportToCurrent || doImport.isPending}>
-                          {doImport.isPending ? 'Importing…' : 'Import'}
+                        <button className="px-3 py-2 rounded border hover:bg-white" onClick={() => setBrowseOpen(true)} disabled={!sessionEmail}>
+                          📁 Browse Drive
                         </button>
+                        <button className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" onClick={() => doImport.mutate({})} disabled={!canImportToCurrent || doImport.isPending}>
+                          {doImport.isPending ? 'Importing…' : 'Import Files'}
+                        </button>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-2">
+                        ✓ Files remain in your Drive · ✓ Encrypted storage · ✓ Full audit trail
                       </div>
                       {progress && (
                         <div className="mt-2 w-full max-w-xl">
@@ -312,12 +337,52 @@ export default function Home() {
 
               {isAuthed && selectedRoom && ['owner', 'admin'].includes(selectedRoom.role) && (
                 <section className="bg-blue-50 rounded-lg p-5 -mx-6 mt-6 px-6">
-                  <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
+                  <h2 className="text-xl font-medium mb-4 flex items-center gap-2">
                     <span>👥</span>
                     <span>Members</span>
+                    {membersQ.data && <span className="text-sm font-normal text-gray-600">({membersQ.data.length})</span>}
                   </h2>
-                  <div className="mb-4">
-                    <label className="block text-sm text-gray-700 mb-1">Add member</label>
+                  
+                  {/* Current Members List */}
+                  {membersQ.isLoading ? (
+                    <div className="text-sm text-gray-600 mb-4">Loading members…</div>
+                  ) : membersQ.data && membersQ.data.length > 0 ? (
+                    <div className="mb-5 bg-white rounded-lg overflow-hidden border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b">
+                          <tr>
+                            <th className="text-left p-3 font-medium text-gray-700">Email</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Role</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Joined</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {membersQ.data.map((member) => (
+                            <tr key={member.email} className="border-b last:border-b-0">
+                              <td className="p-3">{member.email}</td>
+                              <td className="p-3">
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                                  member.role === 'owner' ? 'bg-purple-100 text-purple-800' :
+                                  member.role === 'admin' ? 'bg-blue-100 text-blue-800' :
+                                  member.role === 'editor' ? 'bg-green-100 text-green-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {member.role}
+                                </span>
+                              </td>
+                              <td className="p-3 text-gray-600">
+                                {member.joined_at ? new Date(member.joined_at).toLocaleDateString() : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+
+                  {/* Add Member Form */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Add member</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="email"
@@ -330,21 +395,22 @@ export default function Home() {
                         value={newMemberRole}
                         onChange={(e) => setNewMemberRole(e.target.value)}
                         className="px-3 py-2 rounded border"
+                        title="Viewer: Download only | Editor: Upload & download | Admin: Full control"
                       >
                         <option value="viewer">Viewer</option>
                         <option value="editor">Editor</option>
                         <option value="admin">Admin</option>
                       </select>
                       <button
-                        className="px-3 py-2 rounded border whitespace-nowrap"
+                        className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50 whitespace-nowrap"
                         disabled={!newMemberEmail || addMemberMut.isPending}
                         onClick={() => addMemberMut.mutate()}
                       >
-                        {addMemberMut.isPending ? 'Adding…' : 'Add'}
+                        {addMemberMut.isPending ? 'Adding…' : 'Invite'}
                       </button>
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">
-                      Invite users by email. They'll be able to access this room with the selected role.
+                    <div className="text-xs text-gray-600 mt-1.5">
+                      💡 <b>Viewer:</b> Download only · <b>Editor:</b> Upload & download · <b>Admin:</b> Manage members & files
                     </div>
                   </div>
                 </section>

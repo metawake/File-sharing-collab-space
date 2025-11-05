@@ -1,8 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tantml:react-query';
 import { DataroomFile, listFiles, deleteFile, previewUrl, ApiError, listRoomFiles, previewRoomUrl, deleteRoomFile } from '../utils/api';
 import { useMemo, useState } from 'react';
 import { Modal } from './Modal';
 import { formatBytes } from '../utils/format';
+import { getFileIcon, getFileTypeLabel } from '../utils/fileIcons';
 
 type Props = {
   email: string;
@@ -84,10 +85,15 @@ export function DataRoomTable({ email, roomId, roleInRoom }: Props) {
         <tbody>
           {sorted.map((f) => (
             <tr key={f.id} className="border-b hover:bg-gray-50">
-              <td className="p-2">{f.name}</td>
-              <td className="p-2 text-gray-600">{f.mime_type || '—'}</td>
+              <td className="p-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{getFileIcon(f.mime_type)}</span>
+                  <span>{f.name}</span>
+                </div>
+              </td>
+              <td className="p-2 text-gray-600">{getFileTypeLabel(f.mime_type)}</td>
               <td className="p-2 text-right text-gray-600">{formatBytes(f.size_bytes)}</td>
-              <td className="p-2 text-right text-gray-600">{f.created_at ? new Date(f.created_at).toLocaleString() : '—'}</td>
+              <td className="p-2 text-right text-gray-600">{f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}</td>
               <td className="p-2 text-right">
                 <a className="text-blue-600 hover:underline mr-2 inline-flex items-center gap-1" href={roomId ? previewRoomUrl(roomId, f.id, email) : previewUrl(f.id, email)} target="_blank" rel="noreferrer" download>
                   <span>⬇️</span>

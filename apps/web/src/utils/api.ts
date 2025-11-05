@@ -15,6 +15,12 @@ export type Room = {
   created_at?: string | null;
 };
 
+export type RoomMember = {
+  email: string;
+  role: 'owner' | 'admin' | 'editor' | 'viewer';
+  joined_at: string | null;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 export class ApiError extends Error {
@@ -134,5 +140,12 @@ export async function addRoomMember(roomId: number, memberEmail: string, role: s
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: memberEmail, role }),
   });
+}
+
+export async function listRoomMembers(roomId: number, email: string): Promise<RoomMember[]> {
+  const url = new URL(`${API_BASE}/api/rooms/${roomId}/members`);
+  url.searchParams.set('email', email);
+  const data = await requestJson(url.toString());
+  return data.members as RoomMember[];
 }
 
