@@ -17,7 +17,7 @@ export function DataRoomTable({ email, roomId, roleInRoom }: Props) {
   const q = useQuery({
     queryKey: ['files', email, roomId || null],
     queryFn: () => (roomId ? listRoomFiles(roomId, email) : listFiles(email)),
-    enabled: !!email,
+    enabled: !!roomId || !!email, // Allow fetching for public rooms even without email
   });
 
   const del = useMutation({
@@ -54,7 +54,7 @@ export function DataRoomTable({ email, roomId, roleInRoom }: Props) {
   }
 
   let content: JSX.Element;
-  if (!email) {
+  if (!email && !roomId) {
     content = <div className="text-gray-500">Enter your email to view files.</div>;
   } else if (q.isLoading) {
     content = <div>Loading files…</div>;

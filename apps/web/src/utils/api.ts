@@ -46,13 +46,13 @@ async function requestJson(url: string, init?: RequestInit): Promise<any> {
 
 export function previewUrl(fileId: number, email: string) {
   const url = new URL(`${API_BASE}/api/files/${fileId}/preview`);
-  url.searchParams.set('email', email);
+  if (email) url.searchParams.set('email', email);
   return url.toString();
 }
 
 export function previewRoomUrl(roomId: number, fileId: number, email: string) {
   const url = new URL(`${API_BASE}/api/rooms/${roomId}/files/${fileId}/preview`);
-  url.searchParams.set('email', email);
+  if (email) url.searchParams.set('email', email);
   return url.toString();
 }
 
@@ -105,7 +105,7 @@ export async function createRoom(email: string, name: string): Promise<Room> {
 
 export async function listRoomFiles(roomId: number, email: string): Promise<DataroomFile[]> {
   const url = new URL(`${API_BASE}/api/rooms/${roomId}/files`);
-  url.searchParams.set('email', email);
+  if (email) url.searchParams.set('email', email);
   const data = await requestJson(url.toString());
   return data.files as DataroomFile[];
 }

@@ -350,15 +350,18 @@ export default function Home() {
                 </section>
               )}
 
-              {isAuthed && (
-                <section className="bg-white border border-gray-200 rounded-lg p-5 -mx-6 mt-6 px-6">
-                  <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
-                    <span>📄</span>
-                    <span>{filesTitle}</span>
-                  </h2>
-                  <DataRoomTable email={sessionEmail} roomId={selectedRoom?.id} roleInRoom={selectedRoom?.role} />
-                </section>
-              )}
+              <section className="bg-white border border-gray-200 rounded-lg p-5 -mx-6 mt-6 px-6">
+                <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
+                  <span>📄</span>
+                  <span>{filesTitle}</span>
+                </h2>
+                {!isAuthed && (
+                  <div className="bg-blue-50 border border-blue-200 rounded px-4 py-3 mb-4 text-sm text-blue-900">
+                    👁️ You're viewing the Demo Room as a guest. <button onClick={connect} className="underline font-medium">Sign in</button> to create your own rooms and import files.
+                  </div>
+                )}
+                <DataRoomTable email={sessionEmail} roomId={selectedRoom?.id} roleInRoom={selectedRoom?.role} />
+              </section>
             </div>
           )}
         </section>
