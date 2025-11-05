@@ -147,17 +147,20 @@ def _seed_demo() -> None:
 
 @app.get("/healthz")
 def healthz() -> JSONResponse:
+    """Health check endpoint for monitoring and load balancers."""
     return JSONResponse({"status": "ok"})
 
 
 @app.get("/auth/me")
 def auth_me(request: Request) -> JSONResponse:
+    """Return the current user's email from session, or null if not authenticated."""
     email = get_session_email(request, None)
     return JSONResponse({"email": email})
 
 
 @app.get("/auth/google/login")
 def google_login() -> RedirectResponse:
+    """Initiate Google OAuth flow for Drive access and user authentication."""
     if not (settings.google_client_id and settings.google_redirect_uri):
         raise HTTPException(status_code=500, detail="Google OAuth is not configured")
 
@@ -178,6 +181,10 @@ def google_login() -> RedirectResponse:
 async def google_callback(
     request: Request, code: Optional[str] = None, error: Optional[str] = None
 ) -> JSONResponse:
+    """
+    Handle Google OAuth callback, exchange code for tokens, and create user session.
+    Stores refresh token for offline Drive access.
+    """
     if error:
         raise HTTPException(status_code=400, detail=f"OAuth error: {error}")
     if not code:
@@ -286,6 +293,7 @@ async def google_callback(
 
 @app.post("/auth/logout")
 def logout(request: Request) -> JSONResponse:
+    """Clear user session and log out."""
     try:
         # clear server-side session
         request.session.clear()  # type: ignore[assignment]
@@ -445,6 +453,10 @@ async def _import_one(
 
 @app.post("/api/import")
 async def import_files(req: ImportRequest, request: Request) -> JSONResponse:
+    """
+    Import files from Google Drive into the data room.
+    Optionally link imported files to a specific room.
+    """
     if not req.drive_file_ids:
         raise HTTPException(status_code=400, detail="drive_file_ids is required")
     if not (settings.google_client_id and settings.google_client_secret):
@@ -498,6 +510,7 @@ async def drive_files(
     q: Optional[str] = None,
     page_token: Optional[str] = None,
 ) -> JSONResponse:
+    """Browse user's Google Drive files with search and pagination support."""
     active_email = get_session_email(request, email)
     if not active_email:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -530,6 +543,7 @@ async def drive_files(
 
 @app.get("/api/files")
 def list_files(request: Request, email: Optional[str] = None) -> JSONResponse:
+    """List all files imported by the authenticated user."""
     active_email = get_session_email(request, email)
     if not active_email:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -676,6 +690,7 @@ class CreateRoomRequest(BaseModel):
 
 @app.get("/api/rooms")
 def list_rooms(request: Request, email: Optional[str] = None) -> JSONResponse:
+    """List all data rooms the user has access to, with their role in each room."""
     with Session(engine) as session:
         user = _get_active_user(session, request, email)
         if not user:
@@ -721,6 +736,7 @@ def list_rooms(request: Request, email: Optional[str] = None) -> JSONResponse:
 def create_room(
     req: CreateRoomRequest, request: Request, email: Optional[str] = None
 ) -> JSONResponse:
+    """Create a new data room. The creator becomes the owner."""
     with Session(engine) as session:
         user = _get_active_user(session, request, email)
         if not user:
@@ -753,6 +769,7 @@ class AddMemberRequest(BaseModel):
 def add_member(
     room_id: int, req: AddMemberRequest, request: Request, email: Optional[str] = None
 ) -> JSONResponse:
+    """Add a member to a data room. Requires owner or admin role."""
     if req.role not in ["admin", "editor", "viewer"]:
         raise HTTPException(status_code=400, detail="Invalid role")
     with Session(engine) as session:
@@ -794,6 +811,7 @@ def add_member(
 def room_files(
     room_id: int, request: Request, email: Optional[str] = None
 ) -> JSONResponse:
+    """List all files in a specific data room. Requires room membership."""
     from .models import File as FileModel
 
     with Session(engine) as session:
