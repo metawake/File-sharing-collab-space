@@ -184,16 +184,14 @@ export default function Home() {
                     onClick={async () => {
                       try { await logout(); } catch (_) {}
                       try { localStorage.removeItem('email'); } catch (_) {}
-                      setEmail('');
-                      setIds('');
-                      setBrowseOpen(false);
-                      setSelectedRoom(null); // Reset to room list view
-                      setNewRoomName(''); // Clear form
-                      setNewMemberEmail(''); // Clear form
-                      // Refetch data to show public room for logged-out users
-                      qc.invalidateQueries({ queryKey: ['me'] });
-                      qc.invalidateQueries({ queryKey: ['rooms'] });
+                      // Clear all cached data
+                      qc.clear();
+                      // Show success message before redirect
                       toast.add('✅ Successfully logged out', 'success');
+                      // Redirect to home page (force full reload to reset state)
+                      setTimeout(() => {
+                        window.location.href = '/';
+                      }, 500);
                     }}
                   >
                     Sign out
