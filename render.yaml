@@ -1,31 +1,42 @@
+# PostgreSQL Database
+databases:
+  - name: harvyai-dataroom-db
+    databaseName: harvyai_dataroom
+    user: harvyai_user
+    plan: free
+
+# Services
 services:
+  # FastAPI Backend
   - type: web
-    name: dataroom-api
+    name: harvyai-dataroom-api
     env: python
+    region: oregon
     plan: free
     buildCommand: pip install -r apps/api/requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    autoDeploy: true
+    startCommand: cd apps/api && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        fromDatabase: dataroom-db
-        property: connectionString
-      - key: STORAGE_DIR
-        value: ./storage
-      - key: SESSION_SECRET
-        generateValue: true
-      - key: API_BASE_URL
-        value: https://dataroom-api.onrender.com
-      - key: WEB_BASE_URL
-        value: https://<your-vercel-domain>
+        fromDatabase:
+          name: harvyai-dataroom-db
+          property: connectionString
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REDIRECT_URI
-        value: https://dataroom-api.onrender.com/auth/google/callback
-
-databases:
-  - name: dataroom-db
-    plan: free
-
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_BASE_URL
+        sync: false
+      - key: STORAGE_DIR
+        value: /tmp/uploads
+      - key: ALLOW_EMAIL_PARAM
+        value: false
+      - key: DEMO_SEED
+        value: true
+      - key: SEED_ROOM_NAME
+        value: Demo Room
+      - key: PUBLIC_ROOM_ID
+        value: 1
