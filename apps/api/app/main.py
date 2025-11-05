@@ -181,6 +181,7 @@ def google_login() -> RedirectResponse:
         "access_type": "offline",
         "prompt": "consent",
         "include_granted_scopes": "true",
+        "hl": "en",  # Force English language
     }
     auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
     return RedirectResponse(auth_url, status_code=302)
