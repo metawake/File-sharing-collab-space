@@ -33,10 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.session_secret,
-    same_site="lax",
-    https_only=True,
+    SessionMiddleware, secret_key=settings.session_secret, same_site="lax"
 )
 
 
