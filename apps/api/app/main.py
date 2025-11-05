@@ -876,31 +876,32 @@ def room_files(
                     select(FileRoomLink).where(FileRoomLink.room_id == room_id)
                 ).all()
                 file_ids = [ln.file_id for ln in links]
-                # Join with User to get uploader email
-                file_users = (
-                    session.exec(
-                        select(FileModel, User).where(
-                            FileModel.id.in_(file_ids),
-                            FileModel.user_id == User.id
-                        )
+                # Get files and user info separately for reliability
+                if file_ids:
+                    files_list = session.exec(
+                        select(FileModel).where(FileModel.id.in_(file_ids))
                     ).all()
-                    if file_ids
-                    else []
-                )
+                    # Get all uploader user_ids
+                    user_ids = list(set(f.user_id for f in files_list))
+                    users = session.exec(select(User).where(User.id.in_(user_ids))).all()
+                    user_map = {u.id: u.email for u in users}
+                else:
+                    files_list = []
+                    user_map = {}
                 payload = [
                     {
-                        "id": fu.FileModel.id,
-                        "name": fu.FileModel.name,
-                        "mime_type": fu.FileModel.mime_type,
-                        "size_bytes": fu.FileModel.size_bytes,
-                        "drive_file_id": fu.FileModel.drive_file_id,
-                        "sha256": fu.FileModel.sha256,
+                        "id": f.id,
+                        "name": f.name,
+                        "mime_type": f.mime_type,
+                        "size_bytes": f.size_bytes,
+                        "drive_file_id": f.drive_file_id,
+                        "sha256": f.sha256,
                         "created_at": (
-                            fu.FileModel.created_at.isoformat() if fu.FileModel.created_at else None
+                            f.created_at.isoformat() if f.created_at else None
                         ),
-                        "uploaded_by": fu.User.email,
+                        "uploaded_by": user_map.get(f.user_id, "Unknown"),
                     }
-                    for fu in file_users
+                    for f in files_list
                 ]
                 return JSONResponse({"files": payload})
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -912,25 +913,25 @@ def room_files(
         file_ids = [ln.file_id for ln in links]
         if not file_ids:
             return JSONResponse({"files": []})
-        # Join with User to get uploader email
-        file_users = session.exec(
-            select(FileModel, User).where(
-                FileModel.id.in_(file_ids),
-                FileModel.user_id == User.id
-            )
-        ).all()
+        # Get files and user info separately for reliability
+        files_list = session.exec(select(FileModel).where(FileModel.id.in_(file_ids))).all()
+        # Get all uploader user_ids
+        user_ids = list(set(f.user_id for f in files_list))
+        users = session.exec(select(User).where(User.id.in_(user_ids))).all()
+        user_map = {u.id: u.email for u in users}
+        
         payload = [
             {
-                "id": fu.FileModel.id,
-                "name": fu.FileModel.name,
-                "mime_type": fu.FileModel.mime_type,
-                "size_bytes": fu.FileModel.size_bytes,
-                "drive_file_id": fu.FileModel.drive_file_id,
-                "sha256": fu.FileModel.sha256,
-                "created_at": fu.FileModel.created_at.isoformat() if fu.FileModel.created_at else None,
-                "uploaded_by": fu.User.email,
+                "id": f.id,
+                "name": f.name,
+                "mime_type": f.mime_type,
+                "size_bytes": f.size_bytes,
+                "drive_file_id": f.drive_file_id,
+                "sha256": f.sha256,
+                "created_at": f.created_at.isoformat() if f.created_at else None,
+                "uploaded_by": user_map.get(f.user_id, "Unknown"),
             }
-            for fu in file_users
+            for f in files_list
         ]
         return JSONResponse({"files": payload})
 
