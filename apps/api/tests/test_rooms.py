@@ -16,12 +16,18 @@ def test_rooms_membership_and_rbac(tmp_path):
 
     # Create room as owner via API
     with TestClient(app) as client:
-        r = client.post("/api/rooms", params={"email": owner_email}, json={"name": "Case A"})
+        r = client.post(
+            "/api/rooms", params={"email": owner_email}, json={"name": "Case A"}
+        )
         assert r.status_code == 200
         room_id = r.json()["id"]
 
         # Add viewer member
-        r2 = client.post(f"/api/rooms/{room_id}/members", params={"email": owner_email}, json={"email": viewer_email, "role": "viewer"})
+        r2 = client.post(
+            f"/api/rooms/{room_id}/members",
+            params={"email": owner_email},
+            json={"email": viewer_email, "role": "viewer"},
+        )
         assert r2.status_code == 200
 
         # Seed a file for owner (simulate an imported file)
@@ -53,7 +59,11 @@ def test_rooms_membership_and_rbac(tmp_path):
             file_id = frow.id
 
         # Link file into room
-        r3 = client.post(f"/api/rooms/{room_id}/files", params={"email": owner_email}, json={"file_id": file_id})
+        r3 = client.post(
+            f"/api/rooms/{room_id}/files",
+            params={"email": owner_email},
+            json={"file_id": file_id},
+        )
         assert r3.status_code == 200
         assert r3.json()["linked"] is True
 
@@ -64,16 +74,23 @@ def test_rooms_membership_and_rbac(tmp_path):
         assert any(f["id"] == file_id for f in files)
 
         # Viewer can preview via room-scoped preview
-        r5 = client.get(f"/api/rooms/{room_id}/files/{file_id}/preview", params={"email": viewer_email})
+        r5 = client.get(
+            f"/api/rooms/{room_id}/files/{file_id}/preview",
+            params={"email": viewer_email},
+        )
         assert r5.status_code == 200
         assert r5.content == file_content
 
         # Viewer cannot delete
-        r6 = client.delete(f"/api/rooms/{room_id}/files/{file_id}", params={"email": viewer_email})
+        r6 = client.delete(
+            f"/api/rooms/{room_id}/files/{file_id}", params={"email": viewer_email}
+        )
         assert r6.status_code == 403
 
         # Owner can delete
-        r7 = client.delete(f"/api/rooms/{room_id}/files/{file_id}", params={"email": owner_email})
+        r7 = client.delete(
+            f"/api/rooms/{room_id}/files/{file_id}", params={"email": owner_email}
+        )
         assert r7.status_code == 200
         assert r7.json()["deleted"] is True
         assert not os.path.exists(file_path)

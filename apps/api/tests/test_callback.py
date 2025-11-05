@@ -55,11 +55,14 @@ def test_callback_persists_user_and_token(monkeypatch):
 
     # Validate DB state
     with Session(engine) as session:
-        user = session.exec(select(User).where(User.email == "test@example.com")).first()
+        user = session.exec(
+            select(User).where(User.email == "test@example.com")
+        ).first()
         assert user is not None
-        token = session.exec(select(OAuthToken).where(OAuthToken.user_id == user.id)).first()
+        token = session.exec(
+            select(OAuthToken).where(OAuthToken.user_id == user.id)
+        ).first()
         assert token is not None
         assert token.access_token == "fake-access"
         assert token.refresh_token == "fake-refresh"
         assert token.provider == "google"
-

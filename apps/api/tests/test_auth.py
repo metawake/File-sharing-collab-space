@@ -10,4 +10,3 @@ def test_google_login_requires_config():
     else:
         assert resp.status_code in (302, 307)
         assert "accounts.google.com" in resp.headers.get("location", "")
-

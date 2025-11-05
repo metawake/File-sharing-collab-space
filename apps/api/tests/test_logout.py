@@ -7,4 +7,3 @@ def test_logout_clears_session():
         r = client.post("/auth/logout")
         assert r.status_code == 200
         assert r.json().get("ok") is True
-

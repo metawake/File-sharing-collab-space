@@ -16,9 +16,16 @@ def _setup_user_with_token(email: str):
             session.add(user)
             session.commit()
             session.refresh(user)
-        token = session.exec(select(OAuthToken).where(OAuthToken.user_id == user.id)).first()
+        token = session.exec(
+            select(OAuthToken).where(OAuthToken.user_id == user.id)
+        ).first()
         if not token:
-            token = OAuthToken(user_id=user.id, provider="google", access_token="old-access", refresh_token="refresh-token")
+            token = OAuthToken(
+                user_id=user.id,
+                provider="google",
+                access_token="old-access",
+                refresh_token="refresh-token",
+            )
             session.add(token)
             session.commit()
             session.refresh(token)
@@ -40,27 +47,44 @@ def test_import_success_and_duplicate(tmp_path, monkeypatch):
                 self._data = data
                 self.content = content
                 self.headers = headers or {}
+
             def json(self):
                 return self._data
+
             @property
             def text(self):
                 return ""
+
         if url.endswith("?fields=id,name,mimeType,size,md5Checksum"):
-            return R(200, {"id": "fid1", "name": "doc.txt", "mimeType": "text/plain", "size": "11"})
+            return R(
+                200,
+                {
+                    "id": "fid1",
+                    "name": "doc.txt",
+                    "mimeType": "text/plain",
+                    "size": "11",
+                },
+            )
         if url.endswith("?alt=media"):
-            return R(200, content=b"hello world", headers={"Content-Type": "text/plain"})
+            return R(
+                200, content=b"hello world", headers={"Content-Type": "text/plain"}
+            )
         raise AssertionError("unexpected GET url: " + url)
 
     monkeypatch.setattr(AsyncClient, "get", fake_get)
 
     with TestClient(app) as client:
-        r = client.post("/api/import", json={"email": email, "drive_file_ids": ["fid1"]})
+        r = client.post(
+            "/api/import", json={"email": email, "drive_file_ids": ["fid1"]}
+        )
         assert r.status_code == 200
         res = r.json()
         assert res["results"][0]["status"] == "imported"
 
         # duplicate call should dedupe
-        r2 = client.post("/api/import", json={"email": email, "drive_file_ids": ["fid1"]})
+        r2 = client.post(
+            "/api/import", json={"email": email, "drive_file_ids": ["fid1"]}
+        )
         assert r2.status_code == 200
         res2 = r2.json()
         assert res2["results"][0]["status"] == "duplicate"
@@ -81,6 +105,7 @@ def test_import_refresh_on_401(tmp_path, monkeypatch):
 
     # Fake Google responses: first 401 for metadata and download, then after refresh, success
     from httpx import AsyncClient
+
     calls = {"post": 0, "get": 0}
 
     async def fake_post(self, url, data=None, **kw):
@@ -88,8 +113,10 @@ def test_import_refresh_on_401(tmp_path, monkeypatch):
             def __init__(self, code, data):
                 self.status_code = code
                 self._data = data
+
             def json(self):
                 return self._data
+
         if "oauth2.googleapis.com/token" in url:
             calls["post"] += 1
             return R(200, {"access_token": "new-access"})
@@ -102,25 +129,42 @@ def test_import_refresh_on_401(tmp_path, monkeypatch):
                 self._data = data
                 self.content = content
                 self.headers = headers or {}
+
             def json(self):
                 return self._data
+
             @property
             def text(self):
                 return ""
+
         calls["get"] += 1
         if calls["get"] == 1:
             return R(401)
         if url.endswith("?fields=id,name,mimeType,size,md5Checksum"):
-            return R(200, {"id": "fid2", "name": "file.bin", "mimeType": "application/octet-stream", "size": "3"})
+            return R(
+                200,
+                {
+                    "id": "fid2",
+                    "name": "file.bin",
+                    "mimeType": "application/octet-stream",
+                    "size": "3",
+                },
+            )
         if url.endswith("?alt=media"):
-            return R(200, content=b"xyz", headers={"Content-Type": "application/octet-stream"})
+            return R(
+                200,
+                content=b"xyz",
+                headers={"Content-Type": "application/octet-stream"},
+            )
         raise AssertionError("unexpected GET url: " + url)
 
     monkeypatch.setattr(AsyncClient, "post", fake_post)
     monkeypatch.setattr(AsyncClient, "get", fake_get)
 
     with TestClient(app) as client:
-        r = client.post("/api/import", json={"email": email, "drive_file_ids": ["fid2"]})
+        r = client.post(
+            "/api/import", json={"email": email, "drive_file_ids": ["fid2"]}
+        )
         assert r.status_code == 200
         res = r.json()
         assert res["results"][0]["status"] == "imported"
@@ -132,4 +176,3 @@ def test_import_refresh_on_401(tmp_path, monkeypatch):
         t = session.exec(select(OAuthToken).where(OAuthToken.user_id == u.id)).first()
         assert t is not None
         assert t.access_token == "new-access"
-

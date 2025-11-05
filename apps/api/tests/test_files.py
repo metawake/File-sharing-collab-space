@@ -65,4 +65,3 @@ def test_list_and_preview_and_delete(tmp_path):
         assert r3.status_code == 200
         assert r3.json()["deleted"] is True
         assert not os.path.exists(local_path)
-

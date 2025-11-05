@@ -47,6 +47,7 @@ class Membership(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(index=True, foreign_key="user.id")
     room_id: int = Field(index=True, foreign_key="room.id")
+
     class Role(str, Enum):
         owner = "owner"
         admin = "admin"
@@ -66,7 +67,9 @@ class FileRoomLink(SQLModel, table=True):
 
 class AuditLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    actor_user_id: Optional[int] = Field(default=None, index=True, foreign_key="user.id")
+    actor_user_id: Optional[int] = Field(
+        default=None, index=True, foreign_key="user.id"
+    )
     action: str
     object_type: Optional[str] = None
     object_id: Optional[str] = None
@@ -75,4 +78,3 @@ class AuditLog(SQLModel, table=True):
     user_agent: Optional[str] = None
     metadata_json: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
-
