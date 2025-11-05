@@ -1,0 +1,19 @@
+# Node
+node_modules/
+.next/
+out/
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+
+# Env
+.env
+apps/api/.env
+apps/web/.env.local
+
+# OS
+.DS_Store
+

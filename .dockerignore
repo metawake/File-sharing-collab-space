@@ -1,0 +1,13 @@
+.git
+.gitignore
+node_modules
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.next
+**/out
+**/.DS_Store
+**/.env*
+apps/api/storage
+apps/api/dataroom.db
+

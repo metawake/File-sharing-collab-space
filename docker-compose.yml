@@ -1,0 +1,51 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dataroom
+      POSTGRES_PASSWORD: dataroom
+      POSTGRES_DB: dataroom
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      DATABASE_URL: postgresql+psycopg2://dataroom:dataroom@db:5432/dataroom
+      STORAGE_DIR: /data/storage
+      SESSION_SECRET: dev-change-me
+      API_BASE_URL: http://api:8000
+      WEB_BASE_URL: http://localhost:3000
+      ALLOW_EMAIL_PARAM: "false"
+      DEMO_SEED: "true"
+      SEED_ROOM_NAME: Demo Room
+      # Set these locally for real OAuth testing
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: http://localhost:8000/auth/google/callback
+    volumes:
+      - storage_data:/data/storage
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  db_data:
+  storage_data:
+

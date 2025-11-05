@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: dataroom-api
+    env: python
+    plan: free
+    buildCommand: pip install -r apps/api/requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: dataroom-db
+        property: connectionString
+      - key: STORAGE_DIR
+        value: ./storage
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: API_BASE_URL
+        value: https://dataroom-api.onrender.com
+      - key: WEB_BASE_URL
+        value: https://<your-vercel-domain>
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://dataroom-api.onrender.com/auth/google/callback
+
+databases:
+  - name: dataroom-db
+    plan: free
+

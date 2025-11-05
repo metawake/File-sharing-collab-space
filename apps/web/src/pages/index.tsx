@@ -1,0 +1,377 @@
+import Head from 'next/head';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { importFiles, ApiError, logout, listRooms, createRoom, getMe, addRoomMember } from '../utils/api';
+import type { Room } from '../utils/api';
+import { extractDriveIds } from '../utils/drive';
+import { DriveBrowser } from '../components/DriveBrowser';
+import { useToast } from '../components/ToastProvider';
+import { DataRoomTable } from '../components/DataRoomTable';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+
+type RoomItem = {
+  id: number;
+  name: string;
+  role: 'owner' | 'admin' | 'editor' | 'viewer';
+  created_at?: string | null;
+};
+
+export default function Home() {
+  const [email, setEmail] = useState('');
+  const [ids, setIds] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [reconnectNeeded, setReconnectNeeded] = useState(false);
+  const [progress, setProgress] = useState<{ total: number; done: number } | null>(null);
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState('viewer');
+
+  const connect = () => {
+    window.location.href = `${API_BASE}/auth/google/login`;
+  };
+
+  const meQ = useQuery({
+    queryKey: ['me'],
+    queryFn: getMe,
+  });
+
+  const sessionEmail = meQ.data?.email || '';
+
+  useEffect(() => {
+    try {
+      if (email) localStorage.setItem('email', email);
+    } catch (_) {}
+  }, [email]);
+
+  const doImport = useMutation({
+    mutationFn: async (vars?: { idsOverride?: string[] }) => {
+      setImportError(null);
+      setImportSuccess(null);
+      setReconnectNeeded(false);
+      const driveFileIds = vars?.idsOverride ?? extractDriveIds(ids);
+      const results: { file_id: string; status: string }[] = [];
+      setProgress({ total: driveFileIds.length, done: 0 });
+      for (const fid of driveFileIds) {
+        try {
+          const r = await importFiles(sessionEmail, [fid], selectedRoom?.id);
+          results.push(r[0]);
+        } catch (e) {
+          // Represent as an error result for this file
+          results.push({ file_id: fid, status: 'error' });
+          throw e;
+        } finally {
+          setProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+        }
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      const imported = results.filter((r) => r.status === 'imported').length;
+      const duplicates = results.filter((r) => r.status === 'duplicate').length;
+      setImportSuccess(`Imported ${imported}, skipped ${duplicates} duplicate(s).`);
+      if (imported) toast.add(`Imported ${imported} file(s)`, 'success');
+      if (duplicates) toast.add(`Skipped ${duplicates} duplicate(s)`, 'info');
+      qc.invalidateQueries({ queryKey: ['files', sessionEmail] });
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError) {
+        if (err.status === 401) setReconnectNeeded(true);
+        setImportError(err.detail || err.message || 'Import failed');
+      } else {
+        setImportError('Import failed');
+      }
+    },
+    onSettled: () => {
+      setProgress(null);
+    },
+  });
+
+  const roomsQ = useQuery<Room[]>({
+    queryKey: ['rooms', sessionEmail || 'public'],
+    queryFn: () => listRooms(sessionEmail),
+    // Always attempt; backend will return public room when not authed
+    enabled: true,
+  });
+
+  const createRoomMut = useMutation({
+    mutationFn: () => createRoom(sessionEmail, newRoomName || 'New Room'),
+    onSuccess: (room) => {
+      qc.invalidateQueries({ queryKey: ['rooms', sessionEmail] });
+      setSelectedRoom(room);
+      setNewRoomName('');
+      toast.add(`Created room "${room.name}"`, 'success');
+    },
+  });
+
+  const addMemberMut = useMutation({
+    mutationFn: () => {
+      if (!selectedRoom) throw new Error('No room selected');
+      return addRoomMember(selectedRoom.id, newMemberEmail, newMemberRole, sessionEmail);
+    },
+    onSuccess: () => {
+      setNewMemberEmail('');
+      setNewMemberRole('viewer');
+      toast.add('Member added successfully', 'success');
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError) {
+        toast.add(err.detail || 'Failed to add member', 'error');
+      } else {
+        toast.add('Failed to add member', 'error');
+      }
+    },
+  });
+
+  const isAuthed = !!sessionEmail;
+  const isRoomSelected = !!selectedRoom;
+  const canImportToCurrent = !!sessionEmail && !!isRoomSelected && (selectedRoom ? ['owner', 'admin', 'editor'].includes(selectedRoom.role) : false);
+  const filesTitle = isRoomSelected ? `Files in ${selectedRoom?.name}` : 'Files';
+  const rooms: Array<RoomItem> = Array.isArray(roomsQ.data) ? roomsQ.data as RoomItem[] : [];
+
+  const renderRoomButton = (room: RoomItem) => {
+    const isSelected = selectedRoom?.id === room.id;
+    return (
+      <button
+        key={room.id}
+        className={`px-3 py-2 text-left rounded border ${isSelected ? 'bg-gray-100' : ''}`}
+        onClick={() => setSelectedRoom(room as Room)}
+        title={`Role: ${room.role}`}
+      >
+        <div className="flex items-center justify-between">
+          <span>{room.name}</span>
+          <span className="text-xs text-gray-500">{room.role}</span>
+        </div>
+      </button>
+    );
+  };
+
+  // Auto-select the public demo room for logged-out users so the UI shows content immediately
+  useEffect(() => {
+    if (!isAuthed && !isRoomSelected && Array.isArray(roomsQ.data) && roomsQ.data.length === 1) {
+      setSelectedRoom(roomsQ.data[0]);
+    }
+  }, [isAuthed, isRoomSelected, roomsQ.data]);
+
+  return (
+    <>
+      <Head>
+        <title>HarveyAI DataRoom</title>
+      </Head>
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white/90 border-b">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="text-lg font-semibold flex items-center gap-2">
+              <span className="text-2xl">🗂️</span>
+              <span>DataRoom</span>
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              {isAuthed ? (
+                <>
+                  <span className="text-gray-700">Signed in as <span className="font-medium">{sessionEmail}</span></span>
+                  <button
+                    className="px-3 py-1.5 rounded border"
+                    onClick={async () => {
+                      try { await logout(); } catch (_) {}
+                      try { localStorage.removeItem('email'); } catch (_) {}
+                      setEmail('');
+                      setIds('');
+                      setBrowseOpen(false);
+                      toast.add('Signed out', 'info');
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-700">Not signed in</span>
+                  <button className="px-3 py-1.5 rounded bg-blue-600 text-white" onClick={connect}>Sign in with Google</button>
+                </>
+              )}
+            </div>
+          </div>
+        </header>
+        <main className="max-w-5xl mx-auto p-4">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h1 className="text-2xl font-semibold mb-2">DataRoom</h1>
+            <p className="text-gray-600 mb-6">Sign in with Google to access your DataRoom and import files. Or browse the public Demo Room below.</p>
+        {reconnectNeeded && (
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-3 py-2 rounded mb-3">
+            Token expired or revoked. Please reconnect Google Drive.
+            <button className="ml-2 underline" onClick={connect}>Reconnect</button>
+          </div>
+        )}
+        
+
+        <section className="mt-7">
+          <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
+            <span>📁</span>
+            <span>Rooms</span>
+          </h2>
+          {roomsQ.isLoading ? (
+            <div>Loading rooms…</div>
+          ) : roomsQ.isError ? (
+            <div className="text-red-600">Failed to load rooms</div>
+          ) : !isRoomSelected ? (
+            <div>
+              {isAuthed && (
+                <div className="mb-4">
+                  <label className="block text-sm text-gray-700 mb-1">New room</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={newRoomName}
+                      onChange={(e) => setNewRoomName(e.target.value)}
+                      placeholder="Room name"
+                      className="px-3 py-2 rounded border w-full"
+                    />
+                    <button className="px-3 py-2 rounded border whitespace-nowrap flex items-center gap-1" disabled={!newRoomName || createRoomMut.isPending} onClick={() => createRoomMut.mutate()}>
+                      <span>➕</span>
+                      <span>{createRoomMut.isPending ? 'Creating…' : 'Create'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="text-sm">
+                <div className="font-medium mb-2 text-gray-700">{isAuthed ? 'Your rooms' : 'Available rooms'}</div>
+                <div className="flex flex-col gap-2">
+                  {rooms.length === 0 && (
+                    <div className="text-gray-500 text-sm">No rooms yet. Create one above.</div>
+                  )}
+                  {rooms.map(renderRoomButton)}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-gray-700">
+                  Viewing: <span className="font-medium">Room “{selectedRoom?.name}”</span> · Role: <span className="font-mono">{selectedRoom?.role}</span>
+                </div>
+                <button className="px-2 py-1 rounded border text-sm" onClick={() => setSelectedRoom(null)}>← Back to rooms</button>
+              </div>
+
+              {isAuthed && (
+                <section className="mt-4">
+                  <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
+                    <span>📥</span>
+                    <span>Import into {selectedRoom?.name}</span>
+                  </h2>
+                  {canImportToCurrent ? (
+                    <>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          value={ids}
+                          onChange={(e) => setIds(e.target.value)}
+                          placeholder="Paste Drive URL(s) or raw ID(s), comma separated"
+                          className="px-3 py-2 rounded border min-w-[360px] flex-1"
+                        />
+                        <button className="px-3 py-2 rounded border" onClick={() => setBrowseOpen(true)} disabled={!sessionEmail}>Browse Drive</button>
+                        <button className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50" onClick={() => doImport.mutate({})} disabled={!canImportToCurrent || doImport.isPending}>
+                          {doImport.isPending ? 'Importing…' : 'Import'}
+                        </button>
+                      </div>
+                      {progress && (
+                        <div className="mt-2 w-full max-w-xl">
+                          <div className="flex justify-between text-xs text-gray-600 mb-1">
+                            <span>Importing files…</span>
+                            <span>
+                              {progress.done}/{progress.total}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-200 rounded">
+                            <div
+                              className="h-2 bg-blue-600 rounded"
+                              style={{ width: `${progress.total ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {importError && <div className="text-red-600 mt-2">{importError}</div>}
+                      {importSuccess && <div className="text-green-700 mt-2">{importSuccess}</div>}
+                    </>
+                  ) : (
+                    <div className="text-sm text-gray-600">
+                      You have <b>{selectedRoom?.role}</b> access in “{selectedRoom?.name}”. Only owner/admin/editor can import.
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {isAuthed && selectedRoom && ['owner', 'admin'].includes(selectedRoom.role) && (
+                <section className="mt-7">
+                  <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
+                    <span>👥</span>
+                    <span>Members</span>
+                  </h2>
+                  <div className="mb-4">
+                    <label className="block text-sm text-gray-700 mb-1">Add member</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="email"
+                        value={newMemberEmail}
+                        onChange={(e) => setNewMemberEmail(e.target.value)}
+                        placeholder="Email address"
+                        className="px-3 py-2 rounded border flex-1"
+                      />
+                      <select
+                        value={newMemberRole}
+                        onChange={(e) => setNewMemberRole(e.target.value)}
+                        className="px-3 py-2 rounded border"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <button
+                        className="px-3 py-2 rounded border whitespace-nowrap"
+                        disabled={!newMemberEmail || addMemberMut.isPending}
+                        onClick={() => addMemberMut.mutate()}
+                      >
+                        {addMemberMut.isPending ? 'Adding…' : 'Add'}
+                      </button>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      Invite users by email. They'll be able to access this room with the selected role.
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {isAuthed && (
+                <section className="mt-7">
+                  <h2 className="text-xl font-medium mb-3 flex items-center gap-2">
+                    <span>📄</span>
+                    <span>{filesTitle}</span>
+                  </h2>
+                  <DataRoomTable email={sessionEmail} roomId={selectedRoom?.id} roleInRoom={selectedRoom?.role} />
+                </section>
+              )}
+            </div>
+          )}
+        </section>
+
+          </div>
+
+        <DriveBrowser
+          open={browseOpen}
+          onClose={() => setBrowseOpen(false)}
+          email={sessionEmail}
+          onImport={(selectedIds) => {
+            // Trigger import immediately for selected items
+            doImport.mutate({ idsOverride: selectedIds });
+            // Also reflect in the input for visibility/history
+            setIds((p) => (p ? p + ',' + selectedIds.join(',') : selectedIds.join(',')));
+          }}
+        />
+        </main>
+        </div>
+    </>
+  );
+}
+

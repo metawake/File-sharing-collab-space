@@ -1,0 +1,7 @@
+{
+  "framework": "nextjs",
+  "env": {
+    "NEXT_PUBLIC_API_BASE_URL": "https://dataroom-api.onrender.com"
+  }
+}
+
