@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tantml:react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DataroomFile, listFiles, deleteFile, previewUrl, ApiError, listRoomFiles, previewRoomUrl, deleteRoomFile } from '../utils/api';
 import { useMemo, useState } from 'react';
 import { Modal } from './Modal';
