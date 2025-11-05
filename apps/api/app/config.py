@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, AliasChoices
 from typing import Optional
 
 
@@ -7,7 +7,10 @@ class Settings(BaseSettings):
     app_name: str = "HarveyAI DataRoom API"
     sqlite_url: str = Field(default="sqlite:///./dataroom.db", alias="SQLITE_URL")
     storage_dir: str = Field(default="./storage", alias="STORAGE_DIR")
-    session_secret: str = Field(default="dev-change-me", alias="SESSION_SECRET")
+    session_secret: str = Field(
+        default="dev-change-me",
+        validation_alias=AliasChoices("SECRET_KEY", "SESSION_SECRET"),
+    )
     database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
 
     google_client_id: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_ID")
