@@ -76,8 +76,9 @@ export function DataRoomTable({ email, roomId, roleInRoom }: Props) {
             <th className="text-right p-2 cursor-pointer select-none" onClick={() => toggleSort('size_bytes')}>
               Size {sort.key === 'size_bytes' ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
             </th>
+            <th className="text-left p-2">Uploaded By</th>
             <th className="text-right p-2 cursor-pointer select-none" onClick={() => toggleSort('created_at')}>
-              Created {sort.key === 'created_at' ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
+              Uploaded {sort.key === 'created_at' ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
             </th>
             <th className="text-right p-2">Actions</th>
           </tr>
@@ -93,7 +94,8 @@ export function DataRoomTable({ email, roomId, roleInRoom }: Props) {
               </td>
               <td className="p-2 text-gray-600">{getFileTypeLabel(f.mime_type)}</td>
               <td className="p-2 text-right text-gray-600">{formatBytes(f.size_bytes)}</td>
-              <td className="p-2 text-right text-gray-600">{f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}</td>
+              <td className="p-2 text-gray-600 text-sm">{f.uploaded_by || '—'}</td>
+              <td className="p-2 text-right text-gray-600 text-sm">{f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}</td>
               <td className="p-2 text-right">
                 <a className="text-blue-600 hover:underline mr-2 inline-flex items-center gap-1" href={roomId ? previewRoomUrl(roomId, f.id, email) : previewUrl(f.id, email)} target="_blank" rel="noreferrer" download>
                   <span>⬇️</span>

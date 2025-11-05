@@ -6,6 +6,7 @@ export type DataroomFile = {
   drive_file_id?: string | null;
   sha256?: string | null;
   created_at?: string | null;
+  uploaded_by?: string | null;
 };
 
 export type Room = {

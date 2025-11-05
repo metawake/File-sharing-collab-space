@@ -583,6 +583,7 @@ def list_files(request: Request, email: Optional[str] = None) -> JSONResponse:
                 "drive_file_id": f.drive_file_id,
                 "sha256": f.sha256,
                 "created_at": f.created_at.isoformat() if f.created_at else None,
+                "uploaded_by": active_email,  # User's own files
             }
             for f in user_files
         ]
@@ -875,26 +876,31 @@ def room_files(
                     select(FileRoomLink).where(FileRoomLink.room_id == room_id)
                 ).all()
                 file_ids = [ln.file_id for ln in links]
-                files = (
+                # Join with User to get uploader email
+                file_users = (
                     session.exec(
-                        select(FileModel).where(FileModel.id.in_(file_ids))
+                        select(FileModel, User).where(
+                            FileModel.id.in_(file_ids),
+                            FileModel.user_id == User.id
+                        )
                     ).all()
                     if file_ids
                     else []
                 )
                 payload = [
                     {
-                        "id": f.id,
-                        "name": f.name,
-                        "mime_type": f.mime_type,
-                        "size_bytes": f.size_bytes,
-                        "drive_file_id": f.drive_file_id,
-                        "sha256": f.sha256,
+                        "id": fu.FileModel.id,
+                        "name": fu.FileModel.name,
+                        "mime_type": fu.FileModel.mime_type,
+                        "size_bytes": fu.FileModel.size_bytes,
+                        "drive_file_id": fu.FileModel.drive_file_id,
+                        "sha256": fu.FileModel.sha256,
                         "created_at": (
-                            f.created_at.isoformat() if f.created_at else None
+                            fu.FileModel.created_at.isoformat() if fu.FileModel.created_at else None
                         ),
+                        "uploaded_by": fu.User.email,
                     }
-                    for f in files
+                    for fu in file_users
                 ]
                 return JSONResponse({"files": payload})
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -906,18 +912,25 @@ def room_files(
         file_ids = [ln.file_id for ln in links]
         if not file_ids:
             return JSONResponse({"files": []})
-        files = session.exec(select(FileModel).where(FileModel.id.in_(file_ids))).all()
+        # Join with User to get uploader email
+        file_users = session.exec(
+            select(FileModel, User).where(
+                FileModel.id.in_(file_ids),
+                FileModel.user_id == User.id
+            )
+        ).all()
         payload = [
             {
-                "id": f.id,
-                "name": f.name,
-                "mime_type": f.mime_type,
-                "size_bytes": f.size_bytes,
-                "drive_file_id": f.drive_file_id,
-                "sha256": f.sha256,
-                "created_at": f.created_at.isoformat() if f.created_at else None,
+                "id": fu.FileModel.id,
+                "name": fu.FileModel.name,
+                "mime_type": fu.FileModel.mime_type,
+                "size_bytes": fu.FileModel.size_bytes,
+                "drive_file_id": fu.FileModel.drive_file_id,
+                "sha256": fu.FileModel.sha256,
+                "created_at": fu.FileModel.created_at.isoformat() if fu.FileModel.created_at else None,
+                "uploaded_by": fu.User.email,
             }
-            for f in files
+            for fu in file_users
         ]
         return JSONResponse({"files": payload})
 
