@@ -90,7 +90,9 @@ export async function logout(): Promise<void> {
 }
 
 export async function getMe(): Promise<{ email: string | null }> {
-  return await requestJson(`${API_BASE}/auth/me`);
+  const result = await requestJson(`${API_BASE}/auth/me`);
+  console.log('[Auth Debug] /auth/me response:', result);
+  return result;
 }
 
 export async function listRooms(email: string): Promise<Room[]> {
