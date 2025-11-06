@@ -33,7 +33,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(
-    SessionMiddleware, secret_key=settings.session_secret, same_site="lax"
+    SessionMiddleware,
+    secret_key=settings.session_secret,
+    same_site="none",  # allow cross-site requests from Vercel → Render
+    https_only=True,    # required when SameSite=None
 )
 
 
