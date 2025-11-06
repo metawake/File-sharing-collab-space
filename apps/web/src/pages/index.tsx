@@ -286,17 +286,8 @@ export default function Home() {
                         Files will be securely stored and accessible only to authorized members.
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <input
-                          value={ids}
-                          onChange={(e) => setIds(e.target.value)}
-                          placeholder="Paste Google Drive file URLs (comma-separated)"
-                          className="px-3 py-2 rounded border min-w-[360px] flex-1"
-                        />
                         <button className="px-3 py-2 rounded border hover:bg-white" onClick={() => setBrowseOpen(true)} disabled={!sessionEmail}>
                           📁 Browse Drive
-                        </button>
-                        <button className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" onClick={() => doImport.mutate({})} disabled={!canImportToCurrent || doImport.isPending}>
-                          {doImport.isPending ? 'Importing…' : 'Import Files'}
                         </button>
                       </div>
                       <div className="text-xs text-gray-500 mt-2">
