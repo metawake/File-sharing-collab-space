@@ -87,6 +87,7 @@ def _seed_demo() -> None:
     Safe to call repeatedly; it won't duplicate content.
     """
     from .models import File as FileModel
+    from .models import FileRoomLink
 
     owner_email = "demo-owner@dataroom.local"
     room_name = settings.seed_room_name or "Demo Room"
@@ -629,6 +630,12 @@ def delete_file(
         file = session.get(FileModel, file_id)
         if not file or file.user_id != user.id:
             raise HTTPException(status_code=404, detail="File not found")
+        # Remove any room links first to satisfy FK constraints
+        links = session.exec(
+            select(FileRoomLink).where(FileRoomLink.file_id == file.id)
+        ).all()
+        for ln in links:
+            session.delete(ln)
         if file.local_path and os.path.exists(file.local_path):
             try:
                 os.remove(file.local_path)
@@ -1052,22 +1059,29 @@ def delete_room_file(
         ).first()
         if not link:
             raise HTTPException(status_code=404, detail="File not in room")
+        # Delete the room link first (avoid FK violations)
+        session.delete(link)
+        session.commit()
+
+        # Optionally delete the underlying file if no other room links exist and
+        # the requester is the file owner (uploader).
         f = session.get(FileModel, file_id)
-        if not f:
-            raise HTTPException(status_code=404, detail="File not found")
-        # Only allow deleting if requester is the file owner (uploader)
-        if f.user_id != user.id:
-            raise HTTPException(status_code=403, detail="Forbidden")
-        if f.local_path and os.path.exists(f.local_path):
-            try:
-                os.remove(f.local_path)
-            except OSError:
-                pass
-        session.delete(f)
+        if f:
+            remaining = session.exec(
+                select(FileRoomLink).where(FileRoomLink.file_id == file_id)
+            ).all()
+            if not remaining and f.user_id == user.id:
+                if f.local_path and os.path.exists(f.local_path):
+                    try:
+                        os.remove(f.local_path)
+                    except OSError:
+                        pass
+                session.delete(f)
+
         _log_action(
             session,
             actor_user_id=user.id,
-            action="room.delete_file",
+            action="room.delete_file_link",
             object_type="file",
             object_id=file_id,
             room_id=room_id,
