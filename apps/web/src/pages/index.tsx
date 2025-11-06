@@ -103,7 +103,8 @@ export default function Home() {
     mutationFn: () => createRoom(sessionEmail, newRoomName || 'New Room'),
     onSuccess: (room) => {
       qc.invalidateQueries({ queryKey: ['rooms', sessionEmail] });
-      setSelectedRoom(room);
+      // API returns only { id, name }. The creator is the owner, so enrich with role
+      setSelectedRoom({ ...room, role: 'owner' } as Room);
       setNewRoomName('');
       toast.add(`Created room "${room.name}"`, 'success');
     },
